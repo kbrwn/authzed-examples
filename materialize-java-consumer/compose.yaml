@@ -1,0 +1,45 @@
+name: materialize-java-consumer-demo
+
+x-runtime: &runtime
+  build: .
+  image: materialize-java-consumer:local
+  init: true
+  cpus: 4
+  mem_limit: 2g
+  stop_grace_period: 60s
+
+x-java-options: &java-options "-Xms256m -Xmx512m -XX:MaxDirectMemorySize=256m -XX:ActiveProcessorCount=4"
+
+services:
+  fixture:
+    <<: *runtime
+    entrypoint: ["java", "-cp", "/app/classes:/app/lib/*", "com.authzed.examples.materialize.FixtureServer"]
+    environment:
+      JAVA_TOOL_OPTIONS: *java-options
+      PORT: "50051"
+      EVENTS_PER_REVISION: "10000"
+      FIXTURE_PAYLOAD_BYTES: "256"
+      FIXTURE_TEMPLATES: "8192"
+      EVENTS_PER_SECOND: "0"
+    healthcheck:
+      # TCP readiness only: this does not open a second Watch RPC.
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/50051"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+      start_period: 5s
+
+  consumer:
+    <<: *runtime
+    depends_on:
+      fixture:
+        condition: service_healthy
+    command: ["delayed"]
+    environment:
+      JAVA_TOOL_OPTIONS: *java-options
+      MATERIALIZE_ENDPOINT: "fixture:50051"
+      ALLOW_PLAINTEXT: "true"
+      DURATION_SECONDS: "${DURATION_SECONDS:-30}"
+      ACK_DELAY_MS: "${ACK_DELAY_MS:-50}"
+      MAX_RECONNECTS: "0"
+      CHECKPOINT_PATH: "/tmp/materialize-demo/checkpoint"

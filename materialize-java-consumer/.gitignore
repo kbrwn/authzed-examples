@@ -1,0 +1,8 @@
+/target/
+/state/
+/.env
+/.env.*
+*.properties
+*.jar
+*.jfr
+.DS_Store
